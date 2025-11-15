@@ -114,7 +114,9 @@ function M.setup(settings)
 		then
 			return
 		end
-		vim.ui.input({ prompt = instructions .. "\nPaste new cookie: " }, api.set_session)
+		-- vim.ui.input({ prompt = instructions .. "\nPaste new cookie: " }, api.set_session)
+		local session = vim.fn.inputsecret(instructions .. "\nPaste new cookie: ")
+		api.set_session(session)
 	end, {})
 end
 

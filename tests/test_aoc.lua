@@ -1,16 +1,17 @@
 local MiniTest = require "mini.test"
 local T = MiniTest.new_set {}
-local expect, add_note = MiniTest.expect, MiniTest.add_note
+local expect = MiniTest.expect
 
-local og_input, og_confirm = vim.ui.input, vim.fn.confirm
+local og_confirm = vim.fn.confirm
+local og_inputsecret = vim.fn.inputsecret
 
 local aoc, api
 
 local function setup_test_modules()
 	aoc = require "aoc"
 	api = require "aoc.api"
-	aoc.setup()
 	api._session_file = "session.txt"
+	aoc.setup()
 end
 
 local function remove_fake_cookie()
@@ -27,21 +28,20 @@ T["AocLogin command"] = MiniTest.new_set {
 		pre_case = setup_test_modules,
 		post_case = function()
 			remove_fake_cookie()
-			vim.ui.input = og_input
+			vim.fn.inputsecret = og_inputsecret
 			vim.fn.confirm = og_confirm
 		end,
 	},
 }
 
-local function mock_input(_opts, on_confirm)
-	add_note "called the input function"
-	on_confirm "Fake Cookie"
+local function mock_inputsecret(_prompt, _text)
+	return "Fake Cookie"
 end
 
 T["AocLogin command"]["logging in without pre-defined cookie sets file"] = function()
-	vim.ui.input = mock_input
 	expect.equality(api.is_logged_in(), false)
 
+	vim.fn.inputsecret = mock_inputsecret
 	vim.cmd "AocLogin"
 
 	expect.equality(api.is_logged_in(), true)
@@ -52,7 +52,7 @@ T["AocLogin command"]["login with pre-defined cookie file asks for confirmation"
 	vim.fn.writefile({ "cookie already exists" }, api._session_file)
 	expect.equality(api.is_logged_in(), true)
 
-	vim.ui.input = mock_input
+	vim.fn.inputsecret = mock_inputsecret
 	local asked_to_confirm = false
 	vim.fn.confirm = function(_prompt, _options)
 		asked_to_confirm = true
