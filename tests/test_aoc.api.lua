@@ -111,7 +111,7 @@ T["Challenge Data"]["getting challenge input"] = function()
 	local challenge_input = api.get_challenge_input(1, 2025)
 	expect.equality(last_request.url, "https://adventofcode.com/2025/day/1/input")
 	expect.equality(last_request.cookie, "Fake Cookie")
-	expect.equality(challenge_input.body, "This is a fake response")
+	expect.equality(challenge_input, "This is a fake response")
 end
 
 return T

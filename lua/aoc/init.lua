@@ -56,11 +56,17 @@ end
 --- Sets up the advent of code plugin
 --- @param settings table|nil
 function M.setup(settings)
+	if not settings then
+		settings = {}
+	end
+	
 	-- :Aoc (no args) to pull up today's challenge. Will tell user if Aoc isn't currently going on
 	-- :Aoc DD to pull up challenge for specific day this year.
 	-- :Aoc DD YY to pull up challenge for a specific day on a specific year
 	vim.api.nvim_create_user_command("Aoc", function(args)
-		local day, month, year = args.fargs[1] or M._today.day, M._today.month, args.fargs[2] or M._today.year
+		local day = args.fargs[1] or M._today.day
+		local month = M._today.month
+		local year = args.fargs[2] or M._today.year
 
 		if year == M._today.year then
 			if month < 12 then
@@ -79,6 +85,15 @@ function M.setup(settings)
 			vim.notify("Cannot send request without cookie", vim.log.levels.ERROR)
 			return
 		end
+	
+		-- setup the input storage and download
+		local inputs_dir = settings.inputs_dir or "inputs"
+		if vim.fn.isdirectory(inputs_dir) == 0 then
+			vim.fn.mkdir(inputs_dir)
+		end
+		local challenge_input = api.get_challenge_input(day, year)
+		local fname = string.format(inputs_dir .. "/d%d_%d.txt", day, year)
+		vim.fn.writefile({ challenge_input }, fname)
 
 		api.open_challenge_info(day, year)
 	end, {

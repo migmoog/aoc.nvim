@@ -117,6 +117,34 @@ T["Aoc command"]["say there's no challenge today if not in proper date range (no
 	expect.equality(printed_message, "Advent of Code has ended. Try a specific day.")
 end
 
+local function setup_mock_api()
+	local params = {}
+	local og_api = package.loaded["aoc.api"]
+	og_api.set_session "Fake Cookie"
+
+	local mock_api = {
+		is_logged_in = og_api.is_logged_in,
+		open_challenge_info = function(d, y)
+			params.info_day = d
+			params.info_year = y
+		end,
+		get_challenge_input = function(d, y)
+			params.input_day = d
+			params.input_year = y
+			return "This is a mock input"
+		end,
+	}
+
+	package.loaded["aoc.api"] = mock_api
+
+	MiniTest.finally(function()
+		package.loaded["aoc.api"] = og_api
+		remove_fake_cookie()
+	end)
+
+	return params, mock_api
+end
+
 T["Aoc command"]["pull up today's challenge (no args)"] = function()
 	aoc._today = os.date(
 		"*t",
@@ -127,23 +155,46 @@ T["Aoc command"]["pull up today's challenge (no args)"] = function()
 		}
 	)
 
-	local og_api = package.loaded["aoc.api"]
-	og_api.set_session "Fake Cookie"
-	local day, year
-	package.loaded["aoc.api"] = {
-		is_logged_in = og_api.is_logged_in,
-		open_challenge_info = function(d, y)
-			day = d
-			year = y
-		end,
-	}
-	MiniTest.finally(function()
-		package.loaded["aoc.api"] = og_api
-	end)
+	local params, mock_api = setup_mock_api()
+	-- downloads the challenge input alongside it into a default directory (called inputs)
+	expect.equality(vim.fn.isdirectory "inputs", 0)
 
 	vim.cmd "Aoc"
-	expect.equality(day, 1)
-	expect.equality(year, 2015)
+	MiniTest.finally(function()
+		vim.system { "rm", "-rf", "inputs" }
+	end)
+	expect.equality(params.info_day, 1)
+	expect.equality(params.info_year, 2015)
+	expect.equality(params.input_day, 1)
+	expect.equality(params.input_year, 2015)
+
+	expect.equality(vim.fn.isdirectory "inputs", 1)
+	expect.equality(vim.fn.readfile "inputs/d1_2015.txt", { "This is a mock input" })
+end
+
+T["Configuration"] = function()
+	--[[ settings users need:
+	-- 1. ability to say where they want their challenge inputs stored in their project
+	-- 2. A way to specify how to automatically run their project with the input of a specific day
+	--    - passes in either a day index or pipes in the input
+	--]]
+
+	local config = {
+		inputs_dir = "mock_directory",
+	}
+	require("aoc").setup(config)
+
+	local og_system = vim.system
+
+	MiniTest.finally(function()
+		og_system { "rm", "-rf", config.inputs_dir }
+		vim.system = og_system
+	end)
+
+	local params, mock_api = setup_mock_api()
+	expect.equality(vim.fn.isdirectory "mock_directory", 0)
+	vim.cmd "Aoc"
+	expect.equality(vim.fn.isdirectory "mock_directory", 1)
 end
 
 return T

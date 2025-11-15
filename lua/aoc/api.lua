@@ -45,7 +45,7 @@ function M.get_challenge_input(day, year)
 			["Cookie"] = M.get_session(),
 		},
 	})
-	return response
+	return response.body
 end
 
 return M
