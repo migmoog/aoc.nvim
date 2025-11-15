@@ -2,7 +2,8 @@
 
 local M = {}
 M._session = nil
-M._session_file = vim.fn.stdpath "data" .. "aoc.nvim/session.txt"
+local data_dir = vim.fn.stdpath "data" .. "/aoc.nvim/"
+M._session_file = data_dir .. "session.txt"
 
 ---Checks if the cookie file for advent of code exists
 ---@return boolean
@@ -11,6 +12,9 @@ function M.is_logged_in()
 end
 
 function M.set_session(session_value)
+	if vim.fn.isdirectory(data_dir) == 0 then
+		vim.fn.mkdir(data_dir, "p")
+	end
 	return vim.fn.writefile({ session_value }, M._session_file)
 end
 
