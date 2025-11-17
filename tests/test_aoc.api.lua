@@ -94,13 +94,20 @@ T["Challenge Data"] = MiniTest.new_set {
 T["Challenge Data"]["getting challenge information"] = function()
 	local api = acquire_api()
 	-- takes <day>, <year>
-	local og_system = vim.system
-	vim.system = function(cmd, _opts, _on_exit)
-		expect.equality(cmd, { "xdg-open", "https://adventofcode.com/2025/day/1" })
-		return nil -- will make this a fake one with time im not sure
+	-- local og_system = vim.system
+	-- vim.system = function(cmd, _opts, _on_exit)
+	-- 	expect.equality(cmd, { "xdg-open", "https://adventofcode.com/2025/day/1" })
+	-- 	return nil -- will make this a fake one with time im not sure
+	-- end
+	-- finally(function()
+	-- 	vim.system = og_system
+	-- end)
+	local og_open = vim.ui.open
+	vim.ui.open = function(path, _opts)
+		expect.equality(path, "https://adventofcode.com/2025/day/1")
 	end
 	finally(function()
-		vim.system = og_system
+		vim.ui.open = og_open
 	end)
 	api.open_challenge_info(1, 2025)
 end

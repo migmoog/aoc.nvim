@@ -40,7 +40,7 @@ end
 ---@param day integer
 ---@param year integer
 function M.open_challenge_info(day, year)
-	vim.system { "xdg-open", challenge_url(day, year) }
+	vim.ui.open(challenge_url(day, year))
 end
 
 ---Retrieves the input for the challenge of a specific day and year.
