@@ -1,72 +1,66 @@
 local M = {
 	_today = os.date "*t",
+	_project_config = nil,
 }
 
----@class Challenge
----@field desc1 Description
----@field desc2 Description|nil
-M.Challenge = {}
-
----Represents a challenge in Advent of Code.
----@param desc1 Description
----@param desc2 Description|nil
----@return Challenge
-function M.Challenge:new(desc1, desc2)
-	local c = {
-		desc1 = desc1,
-		desc2 = desc2,
-		answers = {
-			nil, nil
-		}
-	}
-
-	function c:get_completed_challenges()
-		local out = 0
-		for i=1,#self.answers do
-			out = out + self.answers[i] and 1 or 0
-		end
-	end
-
-	return c
+local function err(msg)
+	vim.notify(msg, vim.log.levels.ERROR)
 end
 
----@alias HlDesc ["AocEm"|"AocStar"|"AocCode", number, number, number]
+function M._test_today(day, month, year)
+	M._today = os.date(
+		"*t",
+		os.time {
+			day = day,
+			month = month,
+			year = year,
+		}
+	)
+end
 
----@class Description
----@field header string
----@field paragraphs [string]
----@field hls [HlDesc]
-M.Description = {}
+function M._path_to_input(fname)
+	local inputs_dir = "inputs"
+	if M._project_config and M._project_config.inputs_dir then
+		inputs_dir = M._project_config.inputs_dir
+	end
 
----Constructor for a n Advent of Code challenge description
----@param header string
----@param paragraphs [string]
----@param hls [HlDesc]
----@return Description
-function M.Description:new(header, paragraphs, hls)
-	local d = {
-		header = header,
-		paragraphs = paragraphs,
-		hls = hls,
-	}
+	return inputs_dir .. "/" .. fname
+end
 
-	return d
+function M._search_for_config()
+	local config_path = vim.fn.getcwd() .. "/aoc-config.lua"
+
+	if vim.fn.filereadable(config_path) == 0 then
+		-- not gonna print this as an error bc it would happen
+		-- for every project
+		return
+	end
+	M._project_config = dofile(config_path)
 end
 
 --- Sets up the advent of code plugin
---- @param settings table|nil
-function M.setup(settings)
-	if not settings then
-		settings = {}
-	end
-	
+function M.setup()
+	-- loads project config on start
+	local auid = vim.api.nvim_create_augroup("AdventOfCode", { clear = true })
+	vim.api.nvim_create_autocmd("VimEnter", {
+		group = auid,
+		callback = M._search_for_config,
+	})
+	vim.api.nvim_create_autocmd("DirChanged", {
+		group = auid,
+		callback = M._search_for_config,
+	})
+
 	-- :Aoc (no args) to pull up today's challenge. Will tell user if Aoc isn't currently going on
 	-- :Aoc DD to pull up challenge for specific day this year.
 	-- :Aoc DD YY to pull up challenge for a specific day on a specific year
 	vim.api.nvim_create_user_command("Aoc", function(args)
-		local day = args.fargs[1] or M._today.day
+		local day = tonumber(args.fargs[1] or M._today.day)
 		local month = M._today.month
-		local year = args.fargs[2] or M._today.year
+		local year = tonumber(args.fargs[2] or M._today.year)
+		if M._project_config and M._project_config.year then
+			year = M._project_config.year
+		end
 
 		if year == M._today.year then
 			if month < 12 then
@@ -82,12 +76,16 @@ function M.setup(settings)
 
 		local api = require "aoc.api"
 		if not api.is_logged_in() then
-			vim.notify("Cannot send request without cookie", vim.log.levels.ERROR)
+			err "Cannot send request without cookie"
 			return
 		end
-	
+
 		-- setup the input storage and download
-		local inputs_dir = settings.inputs_dir or "inputs"
+		local inputs_dir = "inputs"
+		if M._project_config and M._project_config.inputs_dir then
+			inputs_dir = M._project_config.inputs_dir
+		end
+
 		if vim.fn.isdirectory(inputs_dir) == 0 then
 			vim.fn.mkdir(inputs_dir)
 		end
@@ -100,7 +98,7 @@ function M.setup(settings)
 		nargs = "*",
 	})
 
-	vim.api.nvim_create_user_command("AocLogin", function(args)
+	vim.api.nvim_create_user_command("AocLogin", function(_args)
 		local instructions = [[
 		1. Log into AOC in your web browser
 		2. Run `:AocLogin` to give the plugin your cookie 
@@ -114,10 +112,65 @@ function M.setup(settings)
 		then
 			return
 		end
-		-- vim.ui.input({ prompt = instructions .. "\nPaste new cookie: " }, api.set_session)
 		local session = vim.fn.inputsecret(instructions .. "\nPaste new cookie: ")
 		api.set_session(session)
 	end, {})
+
+	vim.api.nvim_create_user_command("AocTest", function(args)
+		-- error checks
+		local pc = M._project_config
+		if not pc then
+			err "No aoc-config.lua present"
+			return
+		elseif not (pc.command or pc.callback) then
+			err "aoc-config.lua has neither `callback` or `command` defined."
+			return
+		elseif pc.command and pc.callback then
+			err "aoc-config.lua has both `callback` and `command` defined."
+		end
+
+		if args.fargs[1] == "all" then
+			return
+		end
+
+		local day = tonumber(args.fargs[1] or M._today.day)
+		local year = M._today.year -- i'd love some function chaining in lua
+		if pc and pc.year then
+			year = pc.year
+		end
+		local fname = string.format("d%d_%d.txt", day, year)
+		local input_path = M._path_to_input(fname)
+		if vim.fn.filereadable(input_path) == 0 then
+			local msg = string.format('There is no input file for day %d. Open it with ":Aoc %d"', day, day)
+			err(msg)
+			return
+		end
+
+		local input = ''
+		for _, line in ipairs(vim.fn.readfile(input_path)) do
+			input = input .. line
+		end
+
+		-- running with command
+		if pc.command then
+			local command = {}
+			for _, token in ipairs(pc.command) do
+				local formatted = string.gsub(token, "{day}", tostring(day))
+				formatted = string.gsub(formatted, "{year}", tostring(year))
+				formatted = string.gsub(formatted, "{input}", input)
+				table.insert(command, formatted)
+			end
+			vim.system(command)
+			return
+		end
+		
+		-- running with callback
+		if pc.callback then
+			pc.callback(day, input, year)
+		end
+	end, {
+		nargs = "?",
+	})
 end
 
 return M

@@ -11,6 +11,9 @@ function M.is_logged_in()
 	return vim.fn.filereadable(M._session_file) == 1
 end
 
+---Writes the provided value to the file that will represent the user's OAuth cookie
+---@param session_value string
+---@return -1|0
 function M.set_session(session_value)
 	if vim.fn.isdirectory(data_dir) == 0 then
 		vim.fn.mkdir(data_dir, "p")
@@ -33,10 +36,17 @@ local function challenge_url(day, year, attach)
 	return out
 end
 
+---Opens the challenge in the user's browser
+---@param day integer
+---@param year integer
 function M.open_challenge_info(day, year)
 	vim.system { "xdg-open", challenge_url(day, year) }
 end
 
+---Retrieves the input for the challenge of a specific day and year.
+---@param day integer
+---@param year integer
+---@return string
 function M.get_challenge_input(day, year)
 	local curl = require "plenary.curl"
 
