@@ -15,7 +15,6 @@ local T = MiniTest.new_set {
 
 			aoc = require "aoc"
 			aoc._test_today(1, 12, 2015)
-			aoc._project_config = nil
 			aoc.setup()
 
 			api = require "aoc.api"
@@ -37,6 +36,7 @@ local T = MiniTest.new_set {
 			vim.fn.delete("inputs", "rf")
 			vim.system = og_system
 			test_cmd_stack = {}
+			aoc._project_config = nil
 		end,
 	},
 }
@@ -109,6 +109,23 @@ T["Runs callback in project config"] = function()
 	end
 
 	expect.equality(calls, 25)
+end
+
+T["Running all days"] = function ()
+	local calls = {}
+	aoc._today.day = 25
+	aoc._project_config = {
+		callback = function (day, input, year)
+			table.insert(calls, {day, input, year})
+		end,
+		year = 2023
+	}
+
+	vim.cmd "AocTest all" -- should implicitly download all inputs up to today
+	expect.equality(#calls, 25)
+	for day=1,25 do
+		expect.equality(calls[day], {day, "This is a mock input", 2023})
+	end
 end
 
 return T

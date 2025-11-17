@@ -18,13 +18,24 @@ function M._test_today(day, month, year)
 	)
 end
 
-function M._path_to_input(fname)
+function M._get_inputs_dir()
 	local inputs_dir = "inputs"
 	if M._project_config and M._project_config.inputs_dir then
 		inputs_dir = M._project_config.inputs_dir
 	end
+	return inputs_dir
+end
 
-	return inputs_dir .. "/" .. fname
+function M._get_year()
+	local year = M._today.year
+	if M._project_config and M._project_config.year then
+		year = M._project_config.year
+	end
+	return year
+end
+
+function M._path_to_input(fname)
+	return M._get_inputs_dir() .. "/" .. fname
 end
 
 function M._search_for_config()
@@ -33,9 +44,60 @@ function M._search_for_config()
 	if vim.fn.filereadable(config_path) == 0 then
 		-- not gonna print this as an error bc it would happen
 		-- for every project
+		M._project_config = nil
 		return
 	end
 	M._project_config = dofile(config_path)
+	-- local inputs_dir = M._get_inputs_dir()
+	-- if vim.fn.isdirectory(inputs_dir) == 0 then
+	-- 	vim.fn.mkdir(inputs_dir)
+	-- end
+end
+
+local function test_day(day, year)
+	local pc = M._project_config
+	local fname = string.format("d%d_%d.txt", day, year)
+	local input_path = M._path_to_input(fname)
+	if vim.fn.filereadable(input_path) == 0 then
+		local msg = string.format('There is no input file for day %d. Open it with ":Aoc %d"', day, day)
+		err(msg)
+		return
+	end
+
+	local input = ""
+	for _, line in ipairs(vim.fn.readfile(input_path)) do
+		input = input .. line
+	end
+
+	-- running with command
+	if pc.command then
+		local command = {}
+		for _, token in ipairs(pc.command) do
+			local formatted = string.gsub(token, "{day}", tostring(day))
+			formatted = string.gsub(formatted, "{year}", tostring(year))
+			formatted = string.gsub(formatted, "{input}", input)
+			table.insert(command, formatted)
+		end
+		vim.system(command)
+		return
+	end
+
+	-- running with callback
+	if pc.callback then
+		pc.callback(day, input, year)
+	end
+end
+
+local function download_input(day, year)
+	local inputs_dir = M._get_inputs_dir()
+	if vim.fn.isdirectory(inputs_dir) == 0 then
+		vim.fn.mkdir(inputs_dir)
+	end
+
+	local api = require "aoc.api"
+	local challenge_input = api.get_challenge_input(day, year)
+	local fname = string.format(inputs_dir .. "/d%d_%d.txt", day, year)
+	vim.fn.writefile({ challenge_input }, fname)
 end
 
 --- Sets up the advent of code plugin
@@ -57,7 +119,7 @@ function M.setup()
 	vim.api.nvim_create_user_command("Aoc", function(args)
 		local day = tonumber(args.fargs[1] or M._today.day)
 		local month = M._today.month
-		local year = tonumber(args.fargs[2] or M._today.year)
+		local year = tonumber(args.fargs[2]) or M._get_year()
 		if M._project_config and M._project_config.year then
 			year = M._project_config.year
 		end
@@ -86,12 +148,10 @@ function M.setup()
 			inputs_dir = M._project_config.inputs_dir
 		end
 
-		if vim.fn.isdirectory(inputs_dir) == 0 then
-			vim.fn.mkdir(inputs_dir)
-		end
-		local challenge_input = api.get_challenge_input(day, year)
-		local fname = string.format(inputs_dir .. "/d%d_%d.txt", day, year)
-		vim.fn.writefile({ challenge_input }, fname)
+		-- local challenge_input = api.get_challenge_input(day, year)
+		-- local fname = string.format(inputs_dir .. "/d%d_%d.txt", day, year)
+		-- vim.fn.writefile({ challenge_input }, fname)
+		download_input(day, year)
 
 		api.open_challenge_info(day, year)
 	end, {
@@ -130,44 +190,19 @@ function M.setup()
 		end
 
 		if args.fargs[1] == "all" then
+			local year = M._get_year()
+			for i = 1, 25 do
+				download_input(i, year)
+			end
+			for i = 1, M._today.day do
+				test_day(i, year)
+			end
 			return
 		end
 
 		local day = tonumber(args.fargs[1] or M._today.day)
 		local year = M._today.year -- i'd love some function chaining in lua
-		if pc and pc.year then
-			year = pc.year
-		end
-		local fname = string.format("d%d_%d.txt", day, year)
-		local input_path = M._path_to_input(fname)
-		if vim.fn.filereadable(input_path) == 0 then
-			local msg = string.format('There is no input file for day %d. Open it with ":Aoc %d"', day, day)
-			err(msg)
-			return
-		end
-
-		local input = ''
-		for _, line in ipairs(vim.fn.readfile(input_path)) do
-			input = input .. line
-		end
-
-		-- running with command
-		if pc.command then
-			local command = {}
-			for _, token in ipairs(pc.command) do
-				local formatted = string.gsub(token, "{day}", tostring(day))
-				formatted = string.gsub(formatted, "{year}", tostring(year))
-				formatted = string.gsub(formatted, "{input}", input)
-				table.insert(command, formatted)
-			end
-			vim.system(command)
-			return
-		end
-		
-		-- running with callback
-		if pc.callback then
-			pc.callback(day, input, year)
-		end
+		test_day(day, year)
 	end, {
 		nargs = "?",
 	})
