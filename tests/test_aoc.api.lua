@@ -1,40 +1,38 @@
-local T = MiniTest.new_set()
+local api
+local T = MiniTest.new_set{
+	hooks = {
+		pre_case = function()
+			package.loaded["aoc.api"] = nil
+			api = require "aoc.api"
+			api._session_file = "session.txt"
+		end,
+		post_case = function()
+			vim.fn.delete(api._session_file)
+		end,
+	},
+}
+
 local expect, finally = MiniTest.expect, MiniTest.finally
 
-local function acquire_api()
-	package.loaded["aoc.api"] = nil
-	local api = require "aoc.api"
-	api._session_file = "./session.txt"
-	return api
-end
-local function remove_fake_cookie()
-	vim.fn.delete(require("aoc.api")._session_file)
-end
 
 T["session manipulation"] = MiniTest.new_set()
-
 T["session manipulation"]["raises error when there is no file"] = function()
-	local api = acquire_api()
 	expect.error(api.get_session)
 end
 
 T["session manipulation"]["returns a string when there is a file"] = function()
-	local api = acquire_api()
 	expect.error(api.get_session)
 
 	vim.fn.writefile({ "Fake Cookie" }, api._session_file)
-	finally(remove_fake_cookie)
 
 	expect.equality(api.get_session(), "Fake Cookie")
 end
 
 T["session manipulation"]["set session edits file"] = function()
-	local api = acquire_api()
 	expect.error(api.get_session)
 
 	local result = api.set_session "Fake Cookie"
 	expect.equality(result, 0)
-	finally(remove_fake_cookie)
 
 	expect.equality(api.get_session(), "Fake Cookie")
 
@@ -47,26 +45,22 @@ end
 T["is logged in"] = MiniTest.new_set()
 
 T["is logged in"]["returns false when no session file exists"] = function()
-	local api = acquire_api()
 	expect.equality(api.is_logged_in(), false)
 end
 
 T["is logged in"]["returns true when session file does exist"] = function()
-	local api = acquire_api()
 	expect.equality(api.is_logged_in(), false)
 
 	local result = api.set_session "doo doo"
-	finally(remove_fake_cookie)
+	finally(function()
+		vim.fn.delete(api._session_file)
+	end)
 	expect.equality(result, 0)
 
 	expect.equality(api.is_logged_in(), true)
 end
 
-local last_request = {
-	url = nil,
-	opts = nil,
-	cookie = nil,
-}
+local last_request = {}
 local mock_curl = {
 	get = function(url, opts)
 		last_request.url = url
@@ -74,6 +68,17 @@ local mock_curl = {
 		last_request.cookie = opts.headers["Cookie"]
 		return {
 			body = "This is a fake response",
+		}
+	end,
+
+	post = function(url, opts)
+		last_request.url = url
+		last_request.opts = opts
+		last_request.cookie = opts.headers["Cookie"]
+		last_request.body = opts.body
+		last_request.content_type = opts.headers["Content-Type"]
+		return {
+			body = "Would be fake html here",
 		}
 	end,
 }
@@ -86,22 +91,11 @@ T["Challenge Data"] = MiniTest.new_set {
 		end,
 		post_case = function()
 			package.loaded["plenary.curl"] = plenary_curl
-			remove_fake_cookie()
 		end,
 	},
 }
 
 T["Challenge Data"]["getting challenge information"] = function()
-	local api = acquire_api()
-	-- takes <day>, <year>
-	-- local og_system = vim.system
-	-- vim.system = function(cmd, _opts, _on_exit)
-	-- 	expect.equality(cmd, { "xdg-open", "https://adventofcode.com/2025/day/1" })
-	-- 	return nil -- will make this a fake one with time im not sure
-	-- end
-	-- finally(function()
-	-- 	vim.system = og_system
-	-- end)
 	local og_open = vim.ui.open
 	vim.ui.open = function(path, _opts)
 		expect.equality(path, "https://adventofcode.com/2025/day/1")
@@ -113,12 +107,28 @@ T["Challenge Data"]["getting challenge information"] = function()
 end
 
 T["Challenge Data"]["getting challenge input"] = function()
-	local api = acquire_api()
 	api.set_session "Fake Cookie"
 	local challenge_input = api.get_challenge_input(1, 2025)
 	expect.equality(last_request.url, "https://adventofcode.com/2025/day/1/input")
 	expect.equality(last_request.cookie, "Fake Cookie")
 	expect.equality(challenge_input, "This is a fake response")
+end
+
+T["Submitting answers"] = function()
+	local og_open = vim.ui.open
+	vim.ui.open = function(path, _opts)
+		-- should save the html response and open it in the broswer
+		local file_ending = string.match(path, "%.html$")
+		expect.equality(file_ending, "html")
+	end
+	finally(function()
+		vim.ui.open = og_open
+	end)
+
+	api.submit_answer(1, 2025, "6969")
+	expect.equality(last_request.content_type, "application/x-www-form-urlencoded")
+	expect.equality(last_request.url, "https://adventofcode.com/2025/day/1/answer")
+	expect.equality(last_request.body, "level=1&answer=6969")
 end
 
 return T
