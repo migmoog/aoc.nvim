@@ -29,11 +29,18 @@ local T = MiniTest.new_set {
 			test_cmd_stack = {}
 			vim.system = function(cmd, _opts, _on_exit)
 				table.insert(test_cmd_stack, cmd)
+				return {
+					wait = function(self)
+						return {
+							stdout = "This is a command mock answer",
+						}
+					end,
+				}
 			end
 		end,
 		post_case = function()
 			remove_fake_cookie()
-			vim.fn.delete("inputs", "rf")
+			vim.fn.delete(aoc._project_config_prop("inputs_dir") or "inputs", "rf")
 			vim.system = og_system
 			test_cmd_stack = {}
 			aoc._project_config = nil
@@ -91,18 +98,17 @@ T["Runs command in project config"] = function()
 	end
 end
 
-T["Runs callback in project config"] = function() 
+T["Runs callback in project config"] = function()
 	local calls = 0
 	aoc._project_config = {
-		callback = function(day, input, year) 
+		callback = function(day, input, year)
 			calls = calls + 1
-		end
+		end,
 	}
 
 	for day = 1, 25 do
 		vim.cmd(string.format("Aoc %d", day)) -- get the puzzle inputs
 	end
-
 
 	for day = 1, 25 do
 		vim.cmd(string.format("AocTest %d", day))
@@ -111,21 +117,48 @@ T["Runs callback in project config"] = function()
 	expect.equality(calls, 25)
 end
 
-T["Running all days"] = function ()
+T["Running all days"] = function()
 	local calls = {}
 	aoc._today.day = 25
 	aoc._project_config = {
-		callback = function (day, input, year)
-			table.insert(calls, {day, input, year})
+		callback = function(day, input, level, year)
+			table.insert(calls, { day, input, level, year })
 		end,
-		year = 2023
+		year = 2023,
 	}
 
 	vim.cmd "AocTest all" -- should implicitly download all inputs up to today
 	expect.equality(#calls, 25)
-	for day=1,25 do
-		expect.equality(calls[day], {day, "This is a mock input", 2023})
+	for day = 1, 25 do
+		expect.equality(calls[day], { day, "This is a mock input", 1, 2023 })
 	end
+end
+
+T["Pulling up a project config"] = function()
+	-- do this at the start bc pre_case makes this is in the parent folder
+	remove_fake_cookie()
+
+	local current = vim.fn.getcwd()
+	expect.equality(aoc._project_config, nil)
+
+	vim.fn.chdir(current .. "/tests/config_test")
+	api.set_session "Fake Cookie"
+	finally(function()
+		vim.fn.delete("myawesometestinputs", "rf")
+		remove_fake_cookie()
+		vim.fn.chdir(current)
+	end)
+
+	expect.equality(aoc._project_config, {
+		inputs_dir = "myawesometestinputs",
+		year = 2022,
+		command = { "python", "main.py", "{day}", "{level}", "{year}", "{input}" },
+	})
+
+	vim.cmd "Aoc 1"
+	vim.cmd "AocTest 1"
+
+	expect.equality(test_cmd_stack[1], { "python", "main.py", "1", "1", "2022", "This is a mock input" })
 end
 
 return T

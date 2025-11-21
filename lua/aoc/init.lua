@@ -18,12 +18,20 @@ function M._test_today(day, month, year)
 	)
 end
 
-function M._get_inputs_dir()
-	local inputs_dir = "inputs"
-	if M._project_config and M._project_config.inputs_dir then
-		inputs_dir = M._project_config.inputs_dir
+function M._project_config_prop(name)
+	if not M._project_config then
+		return nil
 	end
-	return inputs_dir
+
+	if M._project_config[name] then
+		return M._project_config[name]
+	end
+
+	return nil
+end
+
+function M._get_inputs_dir()
+	return M._project_config_prop("inputs_dir") or "inputs"
 end
 
 function M._get_year()
@@ -48,13 +56,14 @@ function M._search_for_config()
 		return
 	end
 	M._project_config = dofile(config_path)
-	-- local inputs_dir = M._get_inputs_dir()
-	-- if vim.fn.isdirectory(inputs_dir) == 0 then
-	-- 	vim.fn.mkdir(inputs_dir)
-	-- end
 end
 
-local function test_day(day, year)
+---Returns the output from the user's program of the specific day
+---@param day integer
+---@param year integer
+---@param level 1|2
+---@return string?
+local function test_day(day, year, level)
 	local pc = M._project_config
 	local fname = string.format("d%d_%d.txt", day, year)
 	local input_path = M._path_to_input(fname)
@@ -76,15 +85,16 @@ local function test_day(day, year)
 			local formatted = string.gsub(token, "{day}", tostring(day))
 			formatted = string.gsub(formatted, "{year}", tostring(year))
 			formatted = string.gsub(formatted, "{input}", input)
+			formatted = string.gsub(formatted, "{level}", tostring(level))
 			table.insert(command, formatted)
 		end
-		vim.system(command)
-		return
+		local obj = vim.system(command):wait()
+		return obj.stdout
 	end
 
 	-- running with callback
 	if pc.callback then
-		pc.callback(day, input, year)
+		return pc.callback(day, input, level, year)
 	end
 end
 
@@ -148,9 +158,6 @@ function M.setup()
 			inputs_dir = M._project_config.inputs_dir
 		end
 
-		-- local challenge_input = api.get_challenge_input(day, year)
-		-- local fname = string.format(inputs_dir .. "/d%d_%d.txt", day, year)
-		-- vim.fn.writefile({ challenge_input }, fname)
 		download_input(day, year)
 
 		api.open_challenge_info(day, year)
@@ -195,16 +202,26 @@ function M.setup()
 				download_input(i, year)
 			end
 			for i = 1, M._today.day do
-				test_day(i, year)
+				test_day(i, year, 1)
 			end
 			return
 		end
 
 		local day = tonumber(args.fargs[1] or M._today.day)
-		local year = M._today.year -- i'd love some function chaining in lua
-		test_day(day, year)
+		-- FIXME: look for 
+		local year = M._project_config_prop("year") or M._today.year -- i'd love some function chaining in lua
+		test_day(day, year, 1)
 	end, {
 		nargs = "?",
+	})
+
+	vim.api.nvim_create_user_command("AocSubmit", function(args)
+		local api = require "aoc.api"
+		if #args.fargs == 0 then
+			
+		end
+	end, {
+		nargs = "*",
 	})
 end
 

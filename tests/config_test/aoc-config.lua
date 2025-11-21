@@ -1,5 +1,5 @@
 return {
-	input_dir = "myawesometestinputs",
+	inputs_dir = "myawesometestinputs",
 	year = 2022,
-	command = {"python", "main.py", "{day}", "{input}"}
+	command = {"python", "main.py", "{day}", "{level}", "{year}", "{input}"}
 }
