@@ -1,164 +1,111 @@
-local expect, finally = MiniTest.expect, MiniTest.finally
-local og_system = vim.system
+local eq, er = MiniTest.expect.equality, MiniTest.expect.error
 
-local aoc, api
-local function remove_fake_cookie()
-	vim.fn.delete(api._session_file)
-end
-
-local test_cmd_stack
+local time, conf, api, aoc
 local T = MiniTest.new_set {
 	hooks = {
-		pre_case = function()
-			package.loaded["aoc"] = nil
-			package.loaded["aoc.api"] = nil
+		pre_case = function ()
+			time = require "aoc.time"
+			time:_test_today(1, 12, 2015)
 
-			aoc = require "aoc"
-			aoc._test_today(1, 12, 2015)
-			aoc.setup()
+			conf = require "aoc.config"
 
 			api = require "aoc.api"
-			api._session_file = "session.txt"
-			api.set_session "Fake Cookie"
-			api.get_challenge_input = function(_day, _year)
-				return "This is a mock input"
+			api.get_challenge_input = function (day, year)
+				return string.format("Fake Input: D%dY%d", day, year)
 			end
 
-			api.open_challenge_info = function(_day, _year) end
-
-			test_cmd_stack = {}
-			vim.system = function(cmd, _opts, _on_exit)
-				table.insert(test_cmd_stack, cmd)
-				return {
-					wait = function(self)
-						return {
-							stdout = "This is a command mock answer",
-						}
-					end,
-				}
-			end
-		end,
-		post_case = function()
-			remove_fake_cookie()
-			vim.fn.delete(aoc._project_config_prop("inputs_dir") or "inputs", "rf")
-			vim.system = og_system
-			test_cmd_stack = {}
-			aoc._project_config = nil
+			aoc = require "aoc"
+			aoc.setup()
 		end,
 	},
 }
 
-T["error if there is no config file"] = function()
-	expect.equality(aoc._project_config, nil)
-	expect.error(vim.cmd, "No aoc%-config%.lua present", "AocTest")
-end
+T["Errors"] = MiniTest.new_set {}
 
-T["Error if no input file"] = function()
-	aoc._project_config = {
-		command = { "{day}", "{input}", "{year}" }, -- bs to make sure it runs
-	}
-	expect.equality(vim.fn.isdirectory "inputs", 0)
-
-	expect.error(function()
-		vim.cmd "AocTest"
-	end, 'There is no input file for day 1%. Open it with ":Aoc 1"')
-
-	expect.error(function()
-		vim.cmd "AocTest 2"
-	end, 'There is no input file for day 2%. Open it with ":Aoc 2"')
-end
-
-T["Error if command and callback are defined or undefined"] = function()
-	aoc._project_config = {}
-	expect.error(function()
-		vim.cmd "AocTest"
-	end, "aoc%-config%.lua has neither `callback` or `command` defined%.")
-
-	aoc._project_config = {
+T["Errors"]["callback and command are both defined"] = function ()
+	conf:_test_config {
 		command = {},
-		callback = function(_day, _input, _year) end,
-	}
-	expect.error(function()
-		vim.cmd "AocTest"
-	end, "aoc%-config%.lua has both `callback` and `command` defined%.")
-end
-
-T["Runs command in project config"] = function()
-	aoc._project_config = {
-		command = { "{day}", "{year}", "{input}" },
+		callback = function (_day, _level, _input, _year) end,
 	}
 
-	for day = 1, 25 do
-		vim.cmd(string.format("Aoc %d", day)) -- get the puzzle inputs
-	end
-
-	for day = 1, 25 do
-		vim.cmd(string.format("AocTest %d", day))
-		expect.equality(test_cmd_stack[day], { string.format("%d", day), "2015", "This is a mock input" })
-	end
+	er(vim.cmd, "both `callback` and `command` defined$", "AocTest")
 end
 
-T["Runs callback in project config"] = function()
-	local calls = 0
-	aoc._project_config = {
-		callback = function(day, input, year)
-			calls = calls + 1
+T["Errors"]["callback and command are both undefined"] = function ()
+	conf:_test_config {}
+
+	er(vim.cmd, "neither `callback` or `command` defined$", "AocTest")
+end
+
+local test_choice
+local og_confirm
+T["Run Tests"] = MiniTest.new_set {
+	hooks = {
+		pre_case = function ()
+			og_confirm = vim.fn.confirm
+			vim.fn.confirm = function (_, _)
+				return test_choice
+			end
+		end,
+		post_case = function ()
+			vim.fn.delete(conf.get.inputs_dir, "rf")
+			vim.fn.confirm = og_confirm
+		end,
+	},
+	parametrize = {
+		{ 1 },
+		{ 2 },
+	},
+}
+
+T["Run Tests"]["Runs callback"] = function (lvl)
+	test_choice = lvl
+	local call_stack = {}
+	conf:_test_config {
+		callback = function (day, level, input, year)
+			table.insert(call_stack, { day, level, input, year })
 		end,
 	}
 
-	for day = 1, 25 do
-		vim.cmd(string.format("Aoc %d", day)) -- get the puzzle inputs
-	end
+	vim.cmd "AocTest"
+	eq(call_stack[1], { 1, lvl, "Fake Input: D1Y2015", 2015 })
 
-	for day = 1, 25 do
-		vim.cmd(string.format("AocTest %d", day))
-	end
+	vim.cmd "AocTest 13"
+	eq(call_stack[2], { 13, lvl, "Fake Input: D13Y2015", 2015 })
 
-	expect.equality(calls, 25)
+	vim.cmd "AocTest 9 2022"
+	eq(call_stack[3], { 9, lvl, "Fake Input: D9Y2022", 2022 })
 end
 
-T["Running all days"] = function()
-	local calls = {}
-	aoc._today.day = 25
-	aoc._project_config = {
-		callback = function(day, input, level, year)
-			table.insert(calls, { day, input, level, year })
-		end,
-		year = 2023,
+T["Run Tests"]["Runs vim.system with formatted command"] = function (lvl)
+	test_choice = lvl
+	local cmd_stack = {}
+	conf:_test_config {
+		command = { "{day}", "{level}", "{input}", "{year}" },
 	}
-
-	vim.cmd "AocTest all" -- should implicitly download all inputs up to today
-	expect.equality(#calls, 25)
-	for day = 1, 25 do
-		expect.equality(calls[day], { day, "This is a mock input", 1, 2023 })
-	end
-end
-
-T["Pulling up a project config"] = function()
-	-- do this at the start bc pre_case makes this is in the parent folder
-	remove_fake_cookie()
-
-	local current = vim.fn.getcwd()
-	expect.equality(aoc._project_config, nil)
-
-	vim.fn.chdir(current .. "/tests/config_test")
-	api.set_session "Fake Cookie"
-	finally(function()
-		vim.fn.delete("myawesometestinputs", "rf")
-		remove_fake_cookie()
-		vim.fn.chdir(current)
+	local og_system = vim.system
+	MiniTest.finally(function ()
+		vim.system = og_system
 	end)
 
-	expect.equality(aoc._project_config, {
-		inputs_dir = "myawesometestinputs",
-		year = 2022,
-		command = { "python", "main.py", "{day}", "{level}", "{year}", "{input}" },
-	})
+	vim.system = function (cmd, _on_exit)
+		table.insert(cmd_stack, cmd)
+		return {
+			wait = function ()
+				return { stdout = "TODO" }
+			end,
+		}
+	end
 
-	vim.cmd "Aoc 1"
-	vim.cmd "AocTest 1"
+	local is = tostring(lvl)
+	vim.cmd "AocTest"
+	eq(cmd_stack[1], { "1", is, "Fake Input: D1Y2015", "2015" })
 
-	expect.equality(test_cmd_stack[1], { "python", "main.py", "1", "1", "2022", "This is a mock input" })
+	vim.cmd "AocTest 25"
+	eq(cmd_stack[2], { "25", is, "Fake Input: D25Y2015", "2015" })
+
+	vim.cmd "AocTest 19 2025"
+	eq(cmd_stack[3], { "19", is, "Fake Input: D19Y2025", "2025" })
 end
 
 return T

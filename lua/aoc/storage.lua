@@ -2,11 +2,11 @@ local M = {}
 
 M._answers_file = vim.fn.stdpath "data" .. "/answers.json"
 
-function M.is_initialized()
+function M.is_initialized ()
 	return vim.fn.filereadable(M._answers_file) == 1
 end
 
-local function load_answers()
+local function load_answers ()
 	local lines = vim.fn.readfile(M._answers_file)
 	local out = ""
 	for _, v in ipairs(lines) do
@@ -20,11 +20,11 @@ end
 ---@param year integer
 ---@param level 1|2
 ---@return string
-function M.get_answer(day, year, level)
+function M.get_answer (day, year, level)
 	return load_answers()[tostring(year)][tostring(day)][tostring(level)]
 end
 
-local function add_or_insert(tbl, value, ...)
+local function add_or_insert (tbl, value, ...)
 	local keys = { ... }
 	local node = tbl
 	local i, k = 1, tostring(keys[1])
@@ -39,7 +39,7 @@ local function add_or_insert(tbl, value, ...)
 	node[k] = value
 end
 
-function M.set_answer(day, year, level, answer)
+function M.set_answer (day, year, level, answer)
 	local current_answers = {}
 	if M.is_initialized() then
 		current_answers = load_answers()
