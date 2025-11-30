@@ -93,22 +93,19 @@ function M.setup ()
 			return conf.get.callback(day, level, input, year)
 		end
 
-		-- TODO: present it all pretty to the user n shi
-		if choice == 3 then
-			local results = {
-				action(1),
-				action(2),
-			}
-		else
-			local result = action(choice)
+		if vim.fn.confirm(
+			"Do you want to submit your answers?",
+			"&Yes\n&No"
+		) ~= 1 then
+			return
 		end
-	end, {
-		nargs = "*",
-	})
 
-	vim.api.nvim_create_user_command("AocSubmit", function (args)
 		local api = require "aoc.api"
-		if #args.fargs == 0 then
+		if choice == 3 then
+			api.submit_answer(day, year, action(1), 1)
+			api.submit_answer(day, year, action(2), 2)
+		else
+			api.submit_answer(day, year, action(choice), choice)
 		end
 	end, {
 		nargs = "*",

@@ -58,10 +58,16 @@ function M.get_challenge_input (day, year)
 	return response.body
 end
 
-function M.submit_answer (day, year, answer, is_second_answer)
+---Sends a POST request to Advent Of Code with the level & answer in 
+---form data.
+---@param day integer day index
+---@param year integer year index
+---@param answer string the answer captured from the user's solution
+---@param level 1|2 submits to level 1 if false
+function M.submit_answer (day, year, answer, level)
 	local curl = require "plenary.curl"
 
-	local formdata = string.format("level=%d&answer=%s", is_second_answer and 2 or 1, answer)
+	local formdata = string.format("level=%d&answer=%s", level, answer)
 
 	local response = curl.post(challenge_url(day, year, "answer"), {
 		headers = {

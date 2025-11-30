@@ -80,4 +80,18 @@ function M.test_challenge_with_command (day, year, level, input, command)
 	return obj.stdout
 end
 
+function M.present_results (day, year, results)
+	local prompt = string.format("Day %d %d\n", day, year)
+	local part1, part2 = unpack(results)
+
+	if part1 then
+		prompt = prompt .. string.format("Part 1: %s\n", part1)
+	end
+	if part2 then
+		prompt = prompt .. string.format("Part 2: %s\n", part2)
+	end
+
+	vim.print(prompt)
+end
+
 return M

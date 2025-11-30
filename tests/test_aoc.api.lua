@@ -125,13 +125,13 @@ T["Challenge Data"]["submitting answers"] = function ()
 		vim.ui.open = og_open
 	end)
 
-	api.submit_answer(1, 2025, "6969")
+	api.submit_answer(1, 2025, "6969", 1)
 	expect.equality(last_request.url, "https://adventofcode.com/2025/day/1/answer")
 	expect.equality(last_request.opts.body, "level=1&answer=6969")
 	expect.equality(last_request.opts.headers["Content-Type"], "application/x-www-form-urlencoded")
 	expect.equality(file_ending, ".html")
 
-	api.submit_answer(7, 2020, "8008135", true)
+	api.submit_answer(7, 2020, "8008135", 2)
 	expect.equality(last_request.opts.headers["Content-Type"], "application/x-www-form-urlencoded")
 	expect.equality(last_request.url, "https://adventofcode.com/2020/day/7/answer")
 	expect.equality(last_request.opts.body, "level=2&answer=8008135")
