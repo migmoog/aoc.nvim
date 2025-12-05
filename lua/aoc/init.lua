@@ -93,19 +93,23 @@ function M.setup ()
 			return conf.get.callback(day, level, input, year)
 		end
 
-		if vim.fn.confirm(
-			"Do you want to submit your answers?",
-			"&Yes\n&No"
-		) ~= 1 then
-			return
-		end
+		local should_submit = vim.fn.confirm("Do you want to submit your answers?", "&Yes\n&No") == 1
 
 		local api = require "aoc.api"
 		if choice == 3 then
-			api.submit_answer(day, year, action(1), 1)
-			api.submit_answer(day, year, action(2), 2)
+			local results = { action(1), action(2) }
+			for i, v in ipairs(results) do
+				vim.print(v)
+				if should_submit then
+					api.submit_answer(day, year, v, i)
+				end
+			end
 		else
-			api.submit_answer(day, year, action(choice), choice)
+			local result = action(choice)
+			vim.print(result)
+			if should_submit then
+				api.submit_answer(day, year, result, choice)
+			end
 		end
 	end, {
 		nargs = "*",

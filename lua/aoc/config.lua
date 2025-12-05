@@ -1,7 +1,9 @@
 -- default values. If it's not in this table it must be defined by the user
 -- in their config
 local DEFAULTS = {
-	year = require("aoc.time"):today().year,
+	year = function ()
+		return require("aoc.time"):today().year
+	end,
 	inputs_dir = "inputs",
 }
 
@@ -14,6 +16,9 @@ local function __index_config (tb, k)
 	if not prop then
 		local default = DEFAULTS[k]
 		if default then
+			if type( default ) == "function" then
+				return default()
+			end
 			return default
 		end
 
